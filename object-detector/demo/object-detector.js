@@ -1,15 +1,15 @@
 /* global tf, Image, FileReader, fetch */
 
-const modelUrl = '/model/model.json'
+const modelUrl = 'model/model.json'
 
-const threshold = 0.7
-const imageSize = 512
-const labelsMapUrl = '/assets/labels-map.json'
+const threshold = 0.5
+const imageSize = 500
+// const labelsMapUrl = '/assets/labels-map.json'
 
 const targetSize = { w: imageSize, h: imageSize }
 let model
 let imageElement
-let labelsMap
+// let labelsMap
 
 /**
  * load the TensorFlow.js model
@@ -52,9 +52,8 @@ window.loadImage = function (input) {
       imageElement.src = src
 
       imageElement.onload = function () {
-        const resizeRatio = imageSize / Math.max(imageElement.width, imageElement.height)
-        targetSize.w = Math.round(resizeRatio * imageElement.width)
-        targetSize.h = Math.round(resizeRatio * imageElement.height)
+        targetSize.w = imageSize
+        targetSize.h = imageSize
 
         const origSize = {
           w: imageElement.width,
@@ -100,10 +99,11 @@ window.runModel = async function () {
     // Error: The model contains control flow or dynamic shape ops, please use executeAsync method
     // https://github.com/tensorflow/tfjs/issues/1169#issuecomment-458723296
     // https://js.tensorflow.org/api/latest/#tf.GraphModel.executeAsync
-    const output = await model.executeAsync(
-      { image_tensor: img },
-      ['detection_scores', 'detection_boxes', 'detection_classes'])
-    // [detection_scores, detection_boxes, num_detections, detection_classes]
+
+    // TODO(nmiller): figure out how to pack img in 1X500X500X3
+    const inputTensor = tf.zeros([1, 500, 500, 3], 'int32')
+
+    const output = await model.executeAsync(inputTensor)
 
     const end = (new Date()).getTime()
 
@@ -142,32 +142,27 @@ function preprocessInput (imageInput) {
 async function processOutput (output) {
   console.log('processOutput started')
 
-  if (!labelsMap) {
+  /*if (!labelsMap) {
     await loadLabelsMap()
-  }
+  }*/
 
   // output[0] = detection_scores  // shape: [1, x]
   // output[1] = detection_boxes   // shape: [1, x, 4]
   // output[2] = detection_classes // shape: [1, x]
-  const scores = Array.from(output[0].dataSync())
-  const boxes = output[1].arraySync()[0]
-  const classes = Array.from(output[2].dataSync())
+  // const scores = Array.from(output[0].dataSync())
+  const boxes = output[0].arraySync()[0]
+  // const classes = Array.from(output[2].dataSync())
 
   const results = []
-  scores.forEach((score, i) => {
-    if (score > threshold) {
+  boxes.forEach((box, i) => {
       results.push({
-        label_id: classes[i],
-        label: labelsMap[classes[i]],
-        probability: score.toFixed(4),
         detection_box: [
-          boxes[i][1] * targetSize.w, // x1
-          boxes[i][0] * targetSize.h, // y1
-          boxes[i][3] * targetSize.w, // x2
-          boxes[i][2] * targetSize.h // y2
+          box[1] * targetSize.w, // x1
+          box[0] * targetSize.h, // y1
+          box[3] * targetSize.w, // x2
+          box[2] * targetSize.h // y2
         ]
       })
-    }
   })
 
   drawResults(results)
@@ -181,19 +176,19 @@ function drawResults (results) {
   canvas.height = targetSize.h
 
   results.forEach(result => {
-    drawBoundingBox(ctx, ...result.detection_box, result.label)
+    drawBoundingBox(ctx, ...result.detection_box)
   })
 }
 
-const drawBoundingBox = function (canvasCtx, x1, y1, x2, y2, label) {
+const drawBoundingBox = function (canvasCtx, x1, y1, x2, y2) {
   canvasCtx.beginPath()
   canvasCtx.rect(x1, y1, x2 - x1, y2 - y1)
-  canvasCtx.strokeStyle = 'red'
+  canvasCtx.strokeStyle = 'blue'
   canvasCtx.lineWidth = 4
   canvasCtx.stroke()
   canvasCtx.closePath()
 
-  if (label) {
+  if (false) {
     const fontSize = 14
     canvasCtx.beginPath()
     canvasCtx.textBaseline = 'top'
