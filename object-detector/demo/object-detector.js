@@ -3,7 +3,7 @@
 const modelUrl = 'model/model.json'
 
 const threshold = 0.5
-const imageSize = 500
+const imageSize = 300
 // const labelsMapUrl = '/assets/labels-map.json'
 
 const targetSize = { w: imageSize, h: imageSize }
@@ -100,10 +100,7 @@ window.runModel = async function () {
     // https://github.com/tensorflow/tfjs/issues/1169#issuecomment-458723296
     // https://js.tensorflow.org/api/latest/#tf.GraphModel.executeAsync
 
-    // TODO(nmiller): figure out how to pack img in 1X500X500X3
-    const inputTensor = tf.zeros([1, 500, 500, 3], 'int32')
-
-    const output = await model.executeAsync(inputTensor)
+    const output = await model.executeAsync(img)
 
     const end = (new Date()).getTime()
 
@@ -150,19 +147,23 @@ async function processOutput (output) {
   // output[1] = detection_boxes   // shape: [1, x, 4]
   // output[2] = detection_classes // shape: [1, x]
   // const scores = Array.from(output[0].dataSync())
-  const boxes = output[0].arraySync()[0]
+  const class_scores = output[0].arraySync()[0]
+  const boxes = output[1].arraySync()[0]
   // const classes = Array.from(output[2].dataSync())
 
   const results = []
   boxes.forEach((box, i) => {
-      results.push({
-        detection_box: [
-          box[1] * targetSize.w, // x1
-          box[0] * targetSize.h, // y1
-          box[3] * targetSize.w, // x2
-          box[2] * targetSize.h // y2
-        ]
-      })
+      score = Math.max(...class_scores[i]);
+      if (score > 0.5) {
+          results.push({
+            detection_box: [
+              box[1] * targetSize.w, // x1
+              box[0] * targetSize.h, // y1
+              box[3] * targetSize.w, // x2
+              box[2] * targetSize.h // y2
+            ]
+          })
+      }
   })
 
   drawResults(results)
